@@ -44,9 +44,9 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-async def root():
-    """Health check / API info"""
+@app.get("/api")
+async def api_info():
+    """API info endpoint"""
     return {
         "name": "Agadah Bot API",
         "version": "2.0.0",
