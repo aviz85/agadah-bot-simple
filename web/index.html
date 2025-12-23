@@ -206,6 +206,8 @@
             border-top: 1px solid #eee;
         }
     </style>
+    <!-- Markdown parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -251,6 +253,7 @@
 
     <script>
         let eventSource = null;
+        let progressMessageDiv = null;
 
         function fillExample(text) {
             document.getElementById('userInput').value = text;
@@ -269,6 +272,7 @@
 
             // Clear previous messages
             document.getElementById('messages').innerHTML = '';
+            progressMessageDiv = null;
 
             // Disable input
             btn.disabled = true;
@@ -276,7 +280,7 @@
             btn.textContent = 'יוצר...';
 
             // Show user input
-            addMessage('system', 'בקשתך', input);
+            addMessage('system', 'בקשתך', input, false);
 
             // Connect to SSE endpoint
             const encodedInput = encodeURIComponent(input);
@@ -284,18 +288,26 @@
 
             eventSource.addEventListener('start', (e) => {
                 const data = JSON.parse(e.data);
-                addMessage('system', 'מתחיל', data.message);
+                updateProgressMessage('מתחיל', data.message);
             });
 
             eventSource.addEventListener('progress', (e) => {
                 const data = JSON.parse(e.data);
-                addMessage('agent', data.agent, data.message);
+                updateProgressMessage(data.agent, data.message);
             });
 
             eventSource.addEventListener('complete', (e) => {
                 const data = JSON.parse(e.data);
                 const duration = Math.round(data.duration_seconds);
-                addMessage('complete', `✅ הושלם (${duration} שניות)`, data.output);
+
+                // Remove progress message
+                if (progressMessageDiv) {
+                    progressMessageDiv.remove();
+                    progressMessageDiv = null;
+                }
+
+                // Add completion message with rendered markdown
+                addMessage('complete', `✅ הושלם (${duration} שניות)`, data.output, true);
 
                 // Re-enable input
                 btn.disabled = false;
@@ -311,7 +323,14 @@
 
             eventSource.addEventListener('error', (e) => {
                 const data = e.data ? JSON.parse(e.data) : { message: 'שגיאת חיבור' };
-                addMessage('error', '❌ שגיאה', data.message);
+
+                // Remove progress message
+                if (progressMessageDiv) {
+                    progressMessageDiv.remove();
+                    progressMessageDiv = null;
+                }
+
+                addMessage('error', '❌ שגיאה', data.message, false);
 
                 // Re-enable input
                 btn.disabled = false;
@@ -326,23 +345,49 @@
             });
         }
 
-        function addMessage(type, label, content) {
+        function updateProgressMessage(label, content) {
+            const messagesDiv = document.getElementById('messages');
+
+            // Create or update progress message
+            if (!progressMessageDiv) {
+                progressMessageDiv = document.createElement('div');
+                progressMessageDiv.className = 'message agent';
+                messagesDiv.appendChild(progressMessageDiv);
+            }
+
+            progressMessageDiv.innerHTML = `
+                <div class="label">
+                    <span class="spinner"></span> ${label}
+                </div>
+                <div class="content">${content}</div>
+            `;
+
+            // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addMessage(type, label, content, parseMarkdown) {
             const messagesDiv = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
 
             const labelDiv = document.createElement('div');
             labelDiv.className = 'label';
-
-            if (type === 'agent' || type === 'system') {
-                labelDiv.innerHTML = `<span class="spinner"></span> ${label}`;
-            } else {
-                labelDiv.textContent = label;
-            }
+            labelDiv.textContent = label;
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'content';
-            contentDiv.textContent = formatContent(content);
+
+            if (parseMarkdown && typeof marked !== 'undefined') {
+                // Remove markdown code blocks wrapper if present
+                let cleanContent = content;
+                if (content.startsWith('```markdown') || content.startsWith('```')) {
+                    cleanContent = content.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/```$/, '').trim();
+                }
+                contentDiv.innerHTML = marked.parse(cleanContent);
+            } else {
+                contentDiv.textContent = content;
+            }
 
             messageDiv.appendChild(labelDiv);
             messageDiv.appendChild(contentDiv);
@@ -350,11 +395,6 @@
 
             // Scroll to bottom
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        function formatContent(text) {
-            // Simple markdown-like formatting
-            return text;
         }
 
         // Allow Enter key to submit
