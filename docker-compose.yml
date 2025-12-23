@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  agadah-bot:
+    build: .
+    container_name: agadah-bot-simple
+    restart: unless-stopped
+    ports:
+      - "38472:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MODEL=${MODEL:-anthropic/claude-3.7-sonnet}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
