@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from app.crew import create_activity_crew
+from app.logger import run_logger
 
 # Load environment variables
 load_dotenv()
@@ -79,66 +80,89 @@ async def create_activity(input: str):
 
     async def generate():
         """Generator for SSE events"""
-        try:
-            # Send start event
-            yield format_sse("start", {"message": "מתחיל ליצור פעילות..."})
+        # Initialize run logger
+        with run_logger(input) as rlog:
+            try:
+                # Send start event
+                yield format_sse("start", {"message": "מתחיל ליצור פעילות..."})
 
-            # Create crew
-            logger.info(f"Creating activity for input: {input}")
-            crew = create_activity_crew()
+                # Create crew
+                logger.info(f"Creating activity for input: {input}")
+                crew = create_activity_crew()
 
-            # Track progress
-            start_time = datetime.now()
+                # Track progress
+                start_time = datetime.now()
 
-            # TODO: Hook into CrewAI's callback system for real-time updates
-            # For now, we'll run and return result
-            # In future: use crew.stream() or callbacks
+                yield format_sse("progress", {
+                    "agent": "מעבד קלט",
+                    "message": "אוסף פרטים על הפעילות..."
+                })
 
-            yield format_sse("progress", {
-                "agent": "מעבד קלט",
-                "message": "אוסף פרטים על הפעילות..."
-            })
+                # Run crew
+                result = crew.kickoff(inputs={"user_input": input})
 
-            # Run crew
-            result = crew.kickoff(inputs={"user_input": input})
+                yield format_sse("progress", {
+                    "agent": "חוקר תכנים",
+                    "message": "מחפש סיפורים ומשחקים..."
+                })
 
-            yield format_sse("progress", {
-                "agent": "חוקר תכנים",
-                "message": "מחפש סיפורים ומשחקים..."
-            })
+                await asyncio.sleep(0.5)  # Allow client to receive
 
-            await asyncio.sleep(0.5)  # Allow client to receive
+                yield format_sse("progress", {
+                    "agent": "בונה פעילות",
+                    "message": "יוצר את תוכנית הפעילות..."
+                })
 
-            yield format_sse("progress", {
-                "agent": "בונה פעילות",
-                "message": "יוצר את תוכנית הפעילות..."
-            })
+                await asyncio.sleep(0.5)
 
-            await asyncio.sleep(0.5)
+                yield format_sse("progress", {
+                    "agent": "מעצב",
+                    "message": "מסדר את הטקסט..."
+                })
 
-            yield format_sse("progress", {
-                "agent": "מעצב",
-                "message": "מסדר את הטקסט..."
-            })
+                await asyncio.sleep(0.5)
 
-            await asyncio.sleep(0.5)
+                # Calculate duration
+                duration = (datetime.now() - start_time).total_seconds()
 
-            # Calculate duration
-            duration = (datetime.now() - start_time).total_seconds()
+                # Log final output
+                if rlog:
+                    rlog.log_output(str(result))
 
-            # Send completion
-            yield format_sse("complete", {
-                "output": str(result),
-                "duration_seconds": duration
-            })
+                # Create timing summary
+                timing_summary = f"\n\n---\n\n## ⏱️ סיכום ביצועים\n\n"
+                timing_summary += f"- **משך כולל:** {duration:.1f} שניות\n"
 
-            logger.info(f"Activity created successfully in {duration:.1f}s")
+                if rlog and rlog.run_data.get("agents"):
+                    timing_summary += f"- **סוכנים שהופעלו:** {len(rlog.run_data['agents'])}\n"
 
-        except Exception as e:
-            logger.error(f"Error creating activity: {e}")
-            yield format_sse("error", {
-                "message": f"שגיאה: {str(e)}"
-            })
+                if rlog and rlog.run_data.get("total_tokens", {}).get("total", 0) > 0:
+                    tokens = rlog.run_data["total_tokens"]
+                    timing_summary += f"- **טוקנים כולל:** {tokens['total']:,}\n"
+                    timing_summary += f"  - קלט: {tokens['input']:,}\n"
+                    timing_summary += f"  - פלט: {tokens['output']:,}\n"
+
+                if rlog and rlog.run_data.get("models_used"):
+                    timing_summary += f"- **מודלים:** {', '.join(rlog.run_data['models_used'])}\n"
+
+                # Add timing to output
+                output_with_timing = str(result) + timing_summary
+
+                # Send completion
+                yield format_sse("complete", {
+                    "output": output_with_timing,
+                    "duration_seconds": duration
+                })
+
+                logger.info(f"Activity created successfully in {duration:.1f}s")
+
+            except Exception as e:
+                logger.error(f"Error creating activity: {e}")
+                if rlog:
+                    rlog.log_error(f"Generation failed: {str(e)}", e)
+                yield format_sse("error", {
+                    "message": f"שגיאה: {str(e)}"
+                })
 
     return StreamingResponse(
         generate(),

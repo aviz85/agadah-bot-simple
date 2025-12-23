@@ -12,7 +12,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_API_BASE=${OPENAI_API_BASE}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-      - MODEL=${MODEL:-openai/gpt-4o-mini}
+      - MODEL=${MODEL:-anthropic/claude-3.7-sonnet}
+      - ENABLE_DETAILED_LOGS=${ENABLE_DETAILED_LOGS:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./logs:/app/logs

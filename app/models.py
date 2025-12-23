@@ -99,7 +99,11 @@ class ActivityDetails(BaseModel):
         None,
         description="Explicit central message provided by the user in the prompt. If provided, this MUST be used as the central message. Should be concrete and specific, not generic."
     )
-    
+    central_moral_theme: Optional[str] = Field(
+        None,
+        description="The ONE central moral/educational message that ties the entire activity together. Examples: 'האושר האמיתי נמצא בנתינה לאחרים' (True happiness comes from giving to others), 'המשפחה היא הדבר החשוב ביותר' (Family is the most important thing). This theme should guide ALL choices: story selection, game choice, and discussion questions. Can be user-specified or determined after finding the perfect story."
+    )
+
     @field_validator('main_topic')
     @classmethod
     def validate_main_topic(cls, v: str) -> str:
