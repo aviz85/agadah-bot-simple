@@ -1,8 +1,8 @@
 """
-Simple LLM configuration - OpenRouter only.
+Simple LLM configuration - OpenRouter with LiteLLM support.
 """
 import os
-from langchain_openai import ChatOpenAI
+from crewai.llm import LLM
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,8 +12,12 @@ def get_llm():
     """
     Get OpenRouter LLM instance configured for CrewAI.
 
+    Uses CrewAI's LLM class with is_litellm=True to force LiteLLM routing.
+    This allows using Claude, Gemini, and other models via OpenRouter
+    without requiring native provider API keys.
+
     Returns:
-        ChatOpenAI configured for OpenRouter with CrewAI compatibility
+        CrewAI LLM configured for OpenRouter with LiteLLM
 
     Raises:
         ValueError: If OPENROUTER_API_KEY is not set
@@ -25,21 +29,17 @@ def get_llm():
             "Please set it in your .env file."
         )
 
-    # Use openai/gpt-4o-mini for OpenRouter (avoids Anthropic native provider detection)
-    model = os.getenv("MODEL", "openai/gpt-4o-mini")
+    # Model from env - format: openrouter/provider/model
+    # This prefix prevents CrewAI from using native providers
+    model = os.getenv("MODEL", "openrouter/anthropic/claude-opus-4.5")
 
-    logger.info(f"Initializing LLM with model: {model} via OpenRouter")
+    logger.info(f"Initializing LLM with model: {model} via OpenRouter (LiteLLM)")
 
-    return ChatOpenAI(
+    # When model starts with "openrouter/", CrewAI will use LiteLLM automatically
+    return LLM(
         model=model,
-        openai_api_key=api_key,
-        openai_api_base="https://openrouter.ai/api/v1",
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
         temperature=0.7,
-        max_tokens=4000,
-        model_kwargs={
-            "headers": {
-                "HTTP-Referer": "https://agadah.org.il",
-                "X-Title": "Agadah Bot"
-            }
-        }
+        max_tokens=4000
     )
