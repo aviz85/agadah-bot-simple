@@ -13,9 +13,9 @@ from app.tools.game_db_tool import GameDatabaseSearchTool
 
 logger = logging.getLogger(__name__)
 
-# Don't initialize LLM here - let CrewAI use environment variables
-# This avoids issues with CrewAI's native provider detection
-llm = None
+# Initialize LLM explicitly to use OpenRouter (avoids CrewAI native provider detection)
+from app.llm import get_llm
+llm = get_llm()
 
 # Initialize tools
 search_tool = AgadahWordPressSearchTool()
