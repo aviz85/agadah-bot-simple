@@ -221,21 +221,18 @@ class AgadahWordPressSearchTool(BaseTool):
             if parsed.query:
                 clean_url += f"?{parsed.query}"
 
-            # CRITICAL: Verify URL is accessible (not a 404)
+            # CRITICAL: Verify URL is accessible - ONLY accept HTTP 200
             try:
-                head_response = requests.head(clean_url, timeout=3, allow_redirects=True)
-                if head_response.status_code == 404:
-                    logger.warning(f"URL returns 404 - story not found: {clean_url}")
-                    return None
-                elif head_response.status_code >= 400:
-                    logger.warning(f"URL returns error {head_response.status_code}: {clean_url}")
+                head_response = requests.head(clean_url, timeout=3, allow_redirects=False)
+                if head_response.status_code != 200:
+                    logger.warning(f"URL rejected - HTTP {head_response.status_code} (only 200 accepted): {clean_url}")
                     return None
 
-                logger.debug(f"URL validated (HTTP {head_response.status_code}): {clean_url}")
+                logger.debug(f"URL validated (HTTP 200): {clean_url}")
             except requests.RequestException as e:
                 logger.warning(f"Cannot verify URL {clean_url}: {e}")
-                # Return URL anyway - network issues shouldn't block valid URLs
-                # But log it for debugging
+                # Reject URL on network error - better safe than broken links
+                return None
 
             logger.debug(f"Cleaned URL: {url} -> {clean_url}")
             return clean_url
