@@ -121,7 +121,7 @@ class AgadahWordPressSearchTool(BaseTool):
                         "link": clean_link,
                         "excerpt": excerpt_clean,
                         "date": item.get("date", ""),
-                        "_note": "Use the 'link' field exactly as provided - it has been validated and decoded",
+                        "_CRITICAL_URL_INSTRUCTION": "⚠️ COPY this exact 'link' value character-by-character. DO NOT modify, shorten, or reconstruct. This URL was validated (HTTP 200) and is guaranteed to work.",
                     }
                     formatted_results.append(result)
                 except Exception as e:

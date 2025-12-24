@@ -44,12 +44,22 @@ def create_activity_crew():
 
         1. Search agadah.org.il for 2-3 relevant stories
         2. Search game database for 2-3 game ideas
-        3. Return list with titles, links, and brief relevance notes
+        3. Determine central moral theme (or use user-specified theme)
+        4. Return STRICTLY FORMATTED JSON with exact URLs from search results
+
+        CRITICAL: URLs must be copied character-by-character from search tool output.
+        Do NOT construct, modify, or paraphrase URLs.
 
         Use the confirmed details from previous task.""",
 
         agent=content_finder,
-        expected_output="List of stories from agadah.org.il and game ideas with explanations",
+        expected_output="""JSON object with this exact structure:
+{
+  "central_moral_theme": "...",
+  "stories": [{"title": "...", "url": "EXACT URL from search tool", "relevance_reason": "..."}],
+  "games": [{"name": "...", "description": "...", "connection_to_theme": "..."}]
+}
+CRITICAL: The 'url' field MUST be the exact 'link' value from WordPress search results, copied character-by-character without any modification.""",
         context=[collect_task]
     )
 

@@ -99,28 +99,47 @@ async def create_activity(input: str):
                 })
 
                 # Run crew
-                result = crew.kickoff(inputs={"user_input": input})
-
                 yield format_sse("progress", {
                     "agent": "חוקר תכנים",
                     "message": "מחפש סיפורים ומשחקים..."
                 })
-
-                await asyncio.sleep(0.5)  # Allow client to receive
 
                 yield format_sse("progress", {
                     "agent": "בונה פעילות",
                     "message": "יוצר את תוכנית הפעילות..."
                 })
 
-                await asyncio.sleep(0.5)
-
                 yield format_sse("progress", {
                     "agent": "מעצב",
                     "message": "מסדר את הטקסט..."
                 })
 
-                await asyncio.sleep(0.5)
+                result = crew.kickoff(inputs={"user_input": input})
+
+                # Validate URLs in the output
+                yield format_sse("progress", {
+                    "agent": "מאמת",
+                    "message": "בודק קישורים..."
+                })
+
+                from app.utils import validate_story_url
+                import re
+
+                # Extract all URLs from the output
+                url_pattern = r'https://agadah\.org\.il/[^\s\)\]<]+'
+                urls_found = re.findall(url_pattern, str(result))
+
+                invalid_urls = []
+                for url in urls_found:
+                    if not validate_story_url(url, strict=True):
+                        invalid_urls.append(url)
+                        logger.error(f"⚠️⚠️⚠️ INVALID URL detected in final output: {url}")
+
+                if invalid_urls:
+                    logger.error(f"Found {len(invalid_urls)} invalid URLs in output!")
+                    logger.error("This indicates agents constructed URLs instead of copying from search results")
+
+                await asyncio.sleep(0.3)
 
                 # Calculate duration
                 duration = (datetime.now() - start_time).total_seconds()
