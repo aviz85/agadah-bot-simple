@@ -8,7 +8,7 @@ import json
 import logging
 import re
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -42,10 +42,10 @@ class AgadahContentFetcherTool(BaseTool):
     def _run(self, url: str) -> str:
         """
         Fetch story content from URL.
-        
+
         Args:
             url: URL to the story on agadah.org.il (required)
-        
+
         Returns:
             JSON string with story content
         """
@@ -53,20 +53,23 @@ class AgadahContentFetcherTool(BaseTool):
             error_msg = "URL cannot be empty"
             logger.warning(error_msg)
             return json.dumps({"error": error_msg}, ensure_ascii=False)
-        
-        url = url.strip()
-        
+
+        # Clean and decode URL (handles URL-encoded Hebrew characters)
+        url = unquote(url.strip())
+
         # Validate URL
         if not url.startswith(('http://', 'https://')):
             error_msg = f"Invalid URL format: {url}"
             logger.warning(error_msg)
             return json.dumps({"error": error_msg}, ensure_ascii=False)
-        
+
         # Ensure it's from agadah.org.il
         if "agadah.org.il" not in url:
             error_msg = f"URL must be from agadah.org.il, got: {url}"
             logger.warning(error_msg)
             return json.dumps({"error": error_msg}, ensure_ascii=False)
+
+        logger.debug(f"Decoded URL for fetching: {url}")
         
         # Check if URL is likely a homepage or category page
         url_lower = url.lower()

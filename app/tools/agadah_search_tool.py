@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 
 import requests
 from crewai.tools.base_tool import BaseTool
@@ -102,19 +102,26 @@ class AgadahWordPressSearchTool(BaseTool):
             formatted_results = []
             for item in results:
                 try:
-                    link = item.get("link", "")
-                    if not link or not link.strip():
+                    raw_link = item.get("link", "")
+                    if not raw_link or not raw_link.strip():
+                        logger.debug("Skipping item with empty link")
                         continue
-                    
+
+                    # Validate and clean the URL
+                    clean_link = self._validate_and_clean_url(raw_link)
+                    if not clean_link:
+                        logger.warning(f"Skipping item with invalid link: {raw_link}")
+                        continue
+
                     excerpt_raw = item.get("excerpt", {}).get("rendered", "")
                     excerpt_clean = self._clean_html(excerpt_raw) if excerpt_raw else ""
-                    
+
                     result = {
                         "title": item.get("title", {}).get("rendered", ""),
-                        "link": link.strip(),
+                        "link": clean_link,
                         "excerpt": excerpt_clean,
                         "date": item.get("date", ""),
-                        "_note": "Use the 'link' field exactly as provided when fetching content",
+                        "_note": "Use the 'link' field exactly as provided - it has been validated and decoded",
                     }
                     formatted_results.append(result)
                 except Exception as e:
@@ -171,3 +178,68 @@ class AgadahWordPressSearchTool(BaseTool):
         if len(clean) > 500:
             clean = clean[:500] + "..."
         return clean.strip()
+
+    def _validate_and_clean_url(self, url: str) -> Optional[str]:
+        """
+        Validate and clean URL from agadah.org.il.
+
+        - Decodes URL-encoded characters
+        - Validates domain is agadah.org.il
+        - Ensures proper format
+        - Verifies URL is accessible (returns 200)
+
+        Args:
+            url: Raw URL from WordPress API
+
+        Returns:
+            Cleaned URL or None if invalid
+        """
+        if not url or not url.strip():
+            return None
+
+        try:
+            # Decode URL-encoded characters (like %d7%a2%d7%9c → Hebrew)
+            decoded_url = unquote(url.strip())
+
+            # Parse URL to validate
+            parsed = urlparse(decoded_url)
+
+            # Validate domain
+            if not parsed.netloc or 'agadah.org.il' not in parsed.netloc:
+                logger.warning(f"Invalid domain in URL: {url}")
+                return None
+
+            # Ensure HTTPS
+            if parsed.scheme not in ['http', 'https']:
+                logger.warning(f"Invalid scheme in URL: {url}")
+                return None
+
+            # Reconstruct clean URL
+            clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+            # Add query string if present
+            if parsed.query:
+                clean_url += f"?{parsed.query}"
+
+            # CRITICAL: Verify URL is accessible (not a 404)
+            try:
+                head_response = requests.head(clean_url, timeout=3, allow_redirects=True)
+                if head_response.status_code == 404:
+                    logger.warning(f"URL returns 404 - story not found: {clean_url}")
+                    return None
+                elif head_response.status_code >= 400:
+                    logger.warning(f"URL returns error {head_response.status_code}: {clean_url}")
+                    return None
+
+                logger.debug(f"URL validated (HTTP {head_response.status_code}): {clean_url}")
+            except requests.RequestException as e:
+                logger.warning(f"Cannot verify URL {clean_url}: {e}")
+                # Return URL anyway - network issues shouldn't block valid URLs
+                # But log it for debugging
+
+            logger.debug(f"Cleaned URL: {url} -> {clean_url}")
+            return clean_url
+
+        except Exception as e:
+            logger.warning(f"Error validating URL {url}: {e}")
+            return None
